@@ -82,7 +82,7 @@ class MarketEnv:
         new_price = self.prices[self.current_step]
         new_portfolio_value = self.balance + (self.shares * new_price)
 
-        reward = new_price - self.portfolio_value
+        reward = new_portfolio_value - self.portfolio_value
         self.portfolio_value = new_portfolio_value
 
         next_state = self._get_state()
