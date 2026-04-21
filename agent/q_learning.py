@@ -2,7 +2,7 @@ import numpy as np
 import random
 
 class QLearningAgent:
-    def __init__(self, actions, alpha, gamma, epsilon, epsilon_decay, epsilon_min):
+    def __init__(self, actions, alpha=0.1, gamma=0.95, epsilon=1.0, epsilon_decay=0.995, epsilon_min=0.01):
         """
         actions: 0 (Manter), 1 (Comprar) ou 2 (Vender)
         """
@@ -22,7 +22,7 @@ class QLearningAgent:
         Busca os valores Q para um estado. Se o estado for novo, inicializa com zeros.
         """
         if state not in self.q_table:
-            self.q_table[state] = np.zeros
+            self.q_table[state] = np.zeros(len(self.actions))
         return self.q_table[state]
     
     def choose_action(self, state):
