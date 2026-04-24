@@ -1,6 +1,8 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from env.market_env import MarketEnv
 from agent.q_learning import QLearningAgent
+from utils.plotter import plot_learning_curve, plot_trading_results
 
 # 1. Gerando dados sintéticos (uma senoide para testar o aprendizado)
 t = np.linspace(0, 50, 200)
@@ -43,3 +45,9 @@ for ep in range(episodes):
 
 print("\nTreinamento Concluído!")
 print(f"Tamanho final da Tabela Q: {len(agent.q_table)} estados mapeados.")
+
+# Chamada das funções especificando a pasta de saída
+PASTA_PLOTS = "plots"
+
+plot_learning_curve(historico_recompensas, output_dir=PASTA_PLOTS)
+plot_trading_results(env, agent, output_dir=PASTA_PLOTS)
