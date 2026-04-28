@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from env.market_env import MarketEnv
 from agent.q_learning import QLearningAgent
-from utils.plotter import plot_learning_curve, plot_trading_results
+from utils.plotter import plot_learning_curve, plot_learning_with_epsilon, plot_q_table_heatmap, plot_trading_results
 
 # 1. Gerando dados sintéticos (uma senoide para testar o aprendizado)
 t = np.linspace(0, 50, 200)
@@ -14,6 +14,7 @@ agent = QLearningAgent(actions=[0, 1, 2])
 
 episodes = 1000
 historico_recompensas = []
+historico_epsilon = []
 
 # 3. O Loop Principal de Treinamento
 for ep in range(episodes):
@@ -38,6 +39,7 @@ for ep in range(episodes):
     # Ao final do episódio, diminui a aleatoriedade (Epsilon)
     agent.atualizar_epsilon()
     historico_recompensas.append(recompensa_total_episodio)
+    historico_epsilon.append(agent.epsilon)
     
     # Print de acompanhamento a cada 50 episódios
     if (ep + 1) % 50 == 0:
@@ -51,3 +53,5 @@ PASTA_PLOTS = "plots"
 
 plot_learning_curve(historico_recompensas, output_dir=PASTA_PLOTS)
 plot_trading_results(env, agent, output_dir=PASTA_PLOTS)
+plot_q_table_heatmap(agent, output_dir=PASTA_PLOTS)
+plot_learning_with_epsilon(historico_recompensas, historico_epsilon, output_dir=PASTA_PLOTS)

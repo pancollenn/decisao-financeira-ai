@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import seaborn as sns
 
 def _garantir_pasta(pasta):
     """Cria a pasta se ela ainda não existir."""
@@ -80,6 +81,57 @@ def plot_trading_results(env, agent, output_dir="resultados"):
     plt.grid(True, linestyle='--', alpha=0.5)
     plt.tight_layout()
     
+    plt.savefig(caminho_final, dpi=300)
+    plt.close()
+    print(f"Gráfico guardado em: {caminho_final}")
+
+def plot_q_table_heatmap(agent, output_dir="resultados"):
+    """Gera um mapa de calor visualizando os valores aprendidos na Tabela Q."""
+    _garantir_pasta(output_dir)
+    caminho_final = os.path.join(output_dir, "heatmap_q_table.png")
+    
+    # Extrai os estados e a matriz de valores Q
+    estados = list(agent.q_table.keys())
+    q_values = np.array(list(agent.q_table.values()))
+    
+    # Formata os nomes dos estados para o eixo Y
+    labels_estados = [f"Pos: {s[0]}, Tendência: {s[1]}" for s in estados]
+    labels_acoes = ["Manter", "Comprar", "Vender"]
+    
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(q_values, annot=True, fmt=".2f", cmap="coolwarm", 
+                xticklabels=labels_acoes, yticklabels=labels_estados)
+    
+    plt.title("Valores Aprendidos na Tabela Q", fontsize=14)
+    plt.xlabel("Ações", fontsize=12)
+    plt.ylabel("Estados (Posição, Tendência)", fontsize=12)
+    plt.tight_layout()
+    plt.savefig(caminho_final, dpi=300)
+    plt.close()
+    print(f"Gráfico guardado em: {caminho_final}")
+
+def plot_learning_with_epsilon(historico_recompensas, historico_epsilon, output_dir="resultados"):
+    """Plota a recompensa e o decaimento de epsilon no mesmo gráfico."""
+    _garantir_pasta(output_dir)
+    caminho_final = os.path.join(output_dir, "aprendizado_vs_epsilon.png")
+    
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    # Eixo Y primário (Lucro)
+    ax1.set_xlabel("Episódios", fontsize=12)
+    ax1.set_ylabel("Lucro Total", color="tab:blue", fontsize=12)
+    media_movel = np.convolve(historico_recompensas, np.ones(50)/50, mode='valid')
+    ax1.plot(range(49, len(historico_recompensas)), media_movel, color="tab:blue", linewidth=2, label="Média de Lucro")
+    ax1.tick_params(axis='y', labelcolor="tab:blue")
+
+    # Eixo Y secundário (Epsilon)
+    ax2 = ax1.twinx()
+    ax2.set_ylabel("Taxa de Exploração ($\epsilon$)", color="tab:red", fontsize=12)
+    ax2.plot(historico_epsilon, color="tab:red", linestyle='--', linewidth=2, label="Epsilon")
+    ax2.tick_params(axis='y', labelcolor="tab:red")
+
+    plt.title("Evolução do Lucro vs. Decaimento da Exploração", fontsize=14)
+    fig.tight_layout()
     plt.savefig(caminho_final, dpi=300)
     plt.close()
     print(f"Gráfico guardado em: {caminho_final}")
