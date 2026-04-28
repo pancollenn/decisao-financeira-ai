@@ -64,7 +64,7 @@ for i, alpha in enumerate(alphas):
 # ==========================================
 # 3. GERAÇÃO DO MAPA DE CALOR (HEATMAP)
 # ==========================================
-PASTA_RESULTADOS = "grid_search_results"
+PASTA_RESULTADOS = "plots/grid_search"
 _garantir_pasta(PASTA_RESULTADOS)
 caminho_final = os.path.join(PASTA_RESULTADOS, "grid_search_hiperparametros.png")
 

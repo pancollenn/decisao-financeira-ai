@@ -49,7 +49,7 @@ print("\nTreinamento Concluído!")
 print(f"Tamanho final da Tabela Q: {len(agent.q_table)} estados mapeados.")
 
 # Chamada das funções especificando a pasta de saída
-PASTA_PLOTS = "plots"
+PASTA_PLOTS = "plots/ambiente_sintetico"
 
 plot_learning_curve(historico_recompensas, output_dir=PASTA_PLOTS)
 plot_trading_results(env, agent, output_dir=PASTA_PLOTS)
