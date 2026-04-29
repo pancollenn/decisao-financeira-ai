@@ -6,6 +6,11 @@ from env.market_env import MarketEnv
 from agent.q_learning import QLearningAgent
 from utils.plotter import plot_learning_curve, plot_learning_with_epsilon, plot_q_table_heatmap, plot_trading_results
 
+def suavizar_curva(dados, janela=20):
+    """Suaviza uma curva de dados usando média móvel."""
+    pesos = np.ones(janela) / janela
+    return np.convolve(dados, pesos, mode='valid')
+
 # Cria o diretório de plots caso não exista
 PASTA_PLOTS = "plots/ambiente_sintetico"
 os.makedirs(PASTA_PLOTS, exist_ok=True)
@@ -53,68 +58,39 @@ def treinar_agente(env, agent, episodes=1000):
 # 3. Executando o treinamento
 episodes = 1000
 
-# --- Modelo 1: Janela de Tendências ---
-print("\n--- Iniciando Treinamento: Janela de Tendências (Window=3) ---")
-env_trend = MarketEnv(prices=precos_sinteticos, state_type="trend", window_size=3)
-agent_trend = QLearningAgent(actions=[0, 1, 2])
-rw_trend, eps_trend = treinar_agente(env_trend, agent_trend, episodes)
+# --- 1. Modelo Simples (Apenas 1 dia) ---
+print("\n--- Treinando: Modelo Simples ---")
+env_simple = MarketEnv(prices=precos_sinteticos, state_type="simple")
+agent_simple = QLearningAgent(actions=[0, 1, 2])
+rw_simple, _ = treinar_agente(env_simple, agent_simple, episodes)
 
-# --- Modelo 2: Médias Móveis ---
-print("\n--- Iniciando Treinamento: Médias Móveis (Fast=5, Slow=20) ---")
+# --- 2. Modelo Janela (3 dias) ---
+print("\n--- Treinando: Janela 3 Dias ---")
+env_window = MarketEnv(prices=precos_sinteticos, state_type="trend", window_size=3)
+agent_window = QLearningAgent(actions=[0, 1, 2])
+rw_window, _ = treinar_agente(env_window, agent_window, episodes)
+
+# --- 3. Modelo Médias Móveis ---
+print("\n--- Treinando: Médias Móveis ---")
 env_ma = MarketEnv(prices=precos_sinteticos, state_type="ma", fast_period=5, slow_period=20)
 agent_ma = QLearningAgent(actions=[0, 1, 2])
-rw_ma, eps_ma = treinar_agente(env_ma, agent_ma, episodes)
+rw_ma, _ = treinar_agente(env_ma, agent_ma, episodes)
 
-# 4. Plotando os resultados
-
-print("\nGerando gráficos de comparação...")
-
-# Gráfico Extra: Comparando a Convergência dos dois métodos juntos
-plt.figure(figsize=(10, 5))
-
-# Criamos uma função simples para calcular a média móvel das recompensas e suavizar o gráfico de aprendizado
-def suavizar_curva(dados, janela=20):
-    pesos = np.ones(janela) / janela
-    return np.convolve(dados, pesos, mode='valid')
-
-plt.plot(suavizar_curva(rw_trend), label="Estado: Tendências (Janela 3)", color='blue', alpha=0.8)
-plt.plot(suavizar_curva(rw_ma), label="Estado: Médias Móveis (Cruzamento)", color='orange', alpha=0.8)
-
-plt.title("Comparação de Aprendizado: Tendência vs. Médias Móveis")
+# --- NOVA VISUALIZAÇÃO: Comparação de Lucro Acumulado ---
+plt.figure(figsize=(12, 6))
+plt.plot(suavizar_curva(rw_simple), label="Simples (1 dia)")
+plt.plot(suavizar_curva(rw_window), label="Janela (3 dias)")
+plt.plot(suavizar_curva(rw_ma), label="Médias Móveis")
+plt.title("Evolução do Desempenho (Lucro + Penalidades)")
 plt.xlabel("Episódios")
-plt.ylabel("Recompensa Total (Suavizada)")
+plt.ylabel("Recompensa Suavizada")
 plt.legend()
-plt.grid(True, linestyle='--', alpha=0.6)
-plt.tight_layout()
-plt.savefig(f"{PASTA_PLOTS}/comparacao_convergencia.png")
-plt.show()
+plt.savefig(f"{PASTA_PLOTS}/comparacao_3_modelos.png")
 
-# Gerando os plots individuais que você já tinha, mas salvando com prefixos diferentes
-print("\nSalvando plots do Modelo Trend...")
-# Aqui você pode precisar ajustar o plotter.py se ele não aceitar prefixos de nome de arquivo, 
-# mas em teoria, a chamada continuaria a mesma:
-plot_trading_results(env_trend, agent_trend, output_dir=PASTA_PLOTS)
-
-print("Salvando plots do Modelo MA...")
-plot_trading_results(env_ma, agent_ma, output_dir=PASTA_PLOTS)
-
-print("\nProcesso concluído com sucesso!")
-
-
-
-# # 2. Instanciando Ambiente e Agente
-# env = MarketEnv(prices=precos_sinteticos)
-# agent = QLearningAgent(actions=[0, 1, 2])
-
-
-
-# print("\nTreinamento Concluído!")
-# print(f"Tamanho final da Tabela Q: {len(agent.q_table)} estados mapeados.")
-
-# # Chamada das funções especificando a pasta de saída
-# PASTA_PLOTS = "plots/ambiente_sintetico"
-
-# plot_learning_curve(historico_recompensas, output_dir=PASTA_PLOTS)
-# plot_trading_results(env, agent, output_dir=PASTA_PLOTS)
-# plot_q_table_heatmap(agent, output_dir=PASTA_PLOTS)
-# plot_learning_with_epsilon(historico_recompensas, historico_epsilon, output_dir=PASTA_PLOTS)
+# --- NOVA VISUALIZAÇÃO: Resultado de Trading (Subplots) ---
+fig, axs = plt.subplots(3, 1, figsize=(15, 12), sharex=True)
+# Aqui chamamos a lógica de plot_trading_results adaptada para subplots
+# Ou chamamos separadamente:
+plot_trading_results(env_simple, agent_simple, output_dir=PASTA_PLOTS, filename="trade_simples.png")
+plot_trading_results(env_window, agent_window, output_dir=PASTA_PLOTS, filename="trade_janela.png")
+plot_trading_results(env_ma, agent_ma, output_dir=PASTA_PLOTS, filename="trade_ma.png")
