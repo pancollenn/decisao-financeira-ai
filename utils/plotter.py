@@ -34,57 +34,65 @@ def plot_learning_curve(historico_recompensas, output_dir="resultados"):
     plt.close()
     print(f"Gráfico guardado em: {caminho_final}")
 
-def plot_trading_results(env, agent, output_dir="resultados"):
-    """Executa um teste final e guarda o gráfico de trading na pasta especificada."""
+def plot_trading_results(env, agent, output_dir="resultados", filename="resultado_trading.png"):
+    """
+    Simula um episódio final para avaliar a política aprendida e plota as 
+    ações de Compra (Triângulo Verde) e Venda (Triângulo Vermelho) sobre o preço.
+    """
     _garantir_pasta(output_dir)
-    caminho_final = os.path.join(output_dir, "resultado_trading.png")
+    caminho_final = os.path.join(output_dir, filename)
     
-    # --- Lógica de teste (Epsilon = 0) ---
+    # Roda uma simulação limpa para registrar as ações
     estado = env.reset()
     done = False
-    agent.epsilon = 0.0 
-
-    historico_precos = []
-    compras_x, compras_y = [], []
-    vendas_x, vendas_y = [], []
-
-    passo = 0
-    while not done:
-        acao = agent.choose_action(estado)
-        preco_atual = env.prices[env.current_step]
-        historico_precos.append(preco_atual)
-
-        if acao == 1 and env.position == 0:
-            if env.balance // preco_atual > 0:
-                compras_x.append(passo)
-                compras_y.append(preco_atual)
-        elif acao == 2 and env.position == 1:
-            vendas_x.append(passo)
-            vendas_y.append(preco_atual)
-
-        proximo_state, reward, done = env.step(acao)
-        estado = proximo_state
-        passo += 1
-
-    plt.figure(figsize=(15, 7))
-    plt.plot(historico_precos, label='Preço do Ativo', color='gray', alpha=0.6)
     
-    if compras_x:
-        plt.scatter(compras_x, compras_y, marker='^', color='green', s=100, label='Compra')
-    if vendas_x:
-        plt.scatter(vendas_x, vendas_y, marker='v', color='red', s=100, label='Venda')
+    historico_precos = []
+    historico_compras = []
+    historico_vendas = []
+    
+    # Desliga a exploração (epsilon = 0) para ver o que o agente realmente aprendeu
+    epsilon_original = agent.epsilon
+    agent.epsilon = 0.0 
+    
+    while not done:
+        historico_precos.append(env.prices[env.current_step])
+        
+        acao = agent.choose_action(estado)
+        
+        if acao == 1 and env.position == 0: # Comprou
+            historico_compras.append((env.current_step, env.prices[env.current_step]))
+        elif acao == 2 and env.position == 1: # Vendeu
+            historico_vendas.append((env.current_step, env.prices[env.current_step]))
+            
+        estado, _, done = env.step(acao)
+        
+    # Restaura o epsilon do agente (boa prática)
+    agent.epsilon = epsilon_original
+        
+    # --- Criação do Gráfico ---
+    plt.figure(figsize=(12, 6))
+    plt.plot(historico_precos, label="Preço do Ativo", color="black", alpha=0.7, linewidth=1.5)
+    
+    # Plotando os marcadores
+    if historico_compras:
+        x_compra, y_compra = zip(*historico_compras)
+        plt.scatter(x_compra, y_compra, marker="^", color="green", s=100, label="Compra", zorder=5)
+        
+    if historico_vendas:
+        x_venda, y_venda = zip(*historico_vendas)
+        plt.scatter(x_venda, y_venda, marker="v", color="red", s=100, label="Venda", zorder=5)
 
-    plt.title("Estratégia do Agente Treinado", fontsize=14)
-    plt.xlabel("Tempo", fontsize=12)
-    plt.ylabel("Preço ($)", fontsize=12)
-    plt.legend(fontsize=12)
-    plt.grid(True, linestyle='--', alpha=0.5)
+    # Pegamos as informações do env para formatar o título (para sabermos qual modelo estamos vendo)
+    plt.title(f"Ações do Agente no Episódio de Teste | Patrimônio Final: ${env.portfolio_value:.2f}")
+    plt.xlabel("Tempo (Dias)")
+    plt.ylabel("Preço")
+    plt.legend()
+    plt.grid(True, linestyle="--", alpha=0.5)
     plt.tight_layout()
     
     plt.savefig(caminho_final, dpi=300)
     plt.close()
-    print(f"Gráfico guardado em: {caminho_final}")
-
+    
 def plot_q_table_heatmap(agent, output_dir="resultados"):
     """Gera um mapa de calor visualizando os valores aprendidos na Tabela Q."""
     _garantir_pasta(output_dir)
@@ -126,7 +134,7 @@ def plot_learning_with_epsilon(historico_recompensas, historico_epsilon, output_
 
     # Eixo Y secundário (Epsilon)
     ax2 = ax1.twinx()
-    ax2.set_ylabel("Taxa de Exploração ($\epsilon$)", color="tab:red", fontsize=12)
+    ax2.set_ylabel(r"Taxa de Exploração ($\epsilon$)", color="tab:red", fontsize=12)
     ax2.plot(historico_epsilon, color="tab:red", linestyle='--', linewidth=2, label="Epsilon")
     ax2.tick_params(axis='y', labelcolor="tab:red")
 
