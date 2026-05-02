@@ -6,18 +6,20 @@ from env.market_env import MarketEnv
 from agent.q_learning import QLearningAgent
 from utils.plotter import plot_learning_curve, plot_learning_with_epsilon, plot_q_table_heatmap, plot_trading_results
 
+from utils.data_loader import obter_dados_reais
+
 def suavizar_curva(dados, janela=20):
     """Suaviza uma curva de dados usando média móvel."""
     pesos = np.ones(janela) / janela
     return np.convolve(dados, pesos, mode='valid')
 
-# Cria o diretório de plots caso não exista
-PASTA_PLOTS = "plots/ambiente_sintetico"
-os.makedirs(PASTA_PLOTS, exist_ok=True)
-
-# 1. Gerando dados sintéticos (uma senoide para testar o aprendizado)
-t = np.linspace(0, 50, 200)
-precos_sinteticos = 100 + 20 * np.sin(t) + np.random.normal(0, 2, 200)
+# Pastas de saída
+PASTA_PLOTS_SINTETICO = "plots/ambiente_sintetico_qlearning"
+PASTA_PLOTS_REAL = "plots/ambiente_real_qlearning"
+PASTA_PLOTS_COMPARACOES = "plots/comparacoes_sintetico_vs_real"
+os.makedirs(PASTA_PLOTS_SINTETICO, exist_ok=True)
+os.makedirs(PASTA_PLOTS_REAL, exist_ok=True)
+os.makedirs(PASTA_PLOTS_COMPARACOES, exist_ok=True)
 
 # 2. Função encapsulada de treinamento
 def treinar_agente(env, agent, episodes=1000):
@@ -55,42 +57,101 @@ def treinar_agente(env, agent, episodes=1000):
     print(f"  -> Tamanho final da Tabela Q: {len(agent.q_table)} estados mapeados.")
     return historico_recompensas, historico_epsilon
 
-# 3. Executando o treinamento
-episodes = 1000
+def treinar_tres_modelos(prices, dataset_label, output_dir, episodes):
+    """Treina os 3 modelos (simple, trend-3, ma) e salva os resultados em output_dir."""
+    configs = [
+        ("simple", "Simples (1 dia)", dict(state_type="simple")),
+        ("trend_3", "Janela (3 dias)", dict(state_type="trend", window_size=3)),
+        ("ma_5_20", "Médias Móveis", dict(state_type="ma", fast_period=5, slow_period=20)),
+    ]
 
-# --- 1. Modelo Simples (Apenas 1 dia) ---
-print("\n--- Treinando: Modelo Simples ---")
-env_simple = MarketEnv(prices=precos_sinteticos, state_type="simple")
-agent_simple = QLearningAgent(actions=[0, 1, 2])
-rw_simple, _ = treinar_agente(env_simple, agent_simple, episodes)
+    recompensas_por_modelo = {}
+    envs_por_modelo = {}
+    agents_por_modelo = {}
 
-# --- 2. Modelo Janela (3 dias) ---
-print("\n--- Treinando: Janela 3 Dias ---")
-env_window = MarketEnv(prices=precos_sinteticos, state_type="trend", window_size=3)
-agent_window = QLearningAgent(actions=[0, 1, 2])
-rw_window, _ = treinar_agente(env_window, agent_window, episodes)
+    print(f"\n=== Dataset: {dataset_label} | episódios={episodes} | n_steps={len(prices)} ===")
+    for model_key, model_name, env_kwargs in configs:
+        print(f"\n--- Treinando: {model_name} ({dataset_label}) ---")
+        env = MarketEnv(prices=prices, **env_kwargs)
+        agent = QLearningAgent(actions=[0, 1, 2])
+        rw, _ = treinar_agente(env, agent, episodes)
 
-# --- 3. Modelo Médias Móveis ---
-print("\n--- Treinando: Médias Móveis ---")
-env_ma = MarketEnv(prices=precos_sinteticos, state_type="ma", fast_period=5, slow_period=20)
-agent_ma = QLearningAgent(actions=[0, 1, 2])
-rw_ma, _ = treinar_agente(env_ma, agent_ma, episodes)
+        recompensas_por_modelo[model_key] = rw
+        envs_por_modelo[model_key] = env
+        agents_por_modelo[model_key] = agent
 
-# --- NOVA VISUALIZAÇÃO: Comparação de Lucro Acumulado ---
-plt.figure(figsize=(12, 6))
-plt.plot(suavizar_curva(rw_simple), label="Simples (1 dia)")
-plt.plot(suavizar_curva(rw_window), label="Janela (3 dias)")
-plt.plot(suavizar_curva(rw_ma), label="Médias Móveis")
-plt.title("Evolução do Desempenho (Lucro + Penalidades)")
-plt.xlabel("Episódios")
-plt.ylabel("Recompensa Suavizada")
-plt.legend()
-plt.savefig(f"{PASTA_PLOTS}/comparacao_3_modelos.png")
+        plot_trading_results(env, agent, output_dir=output_dir, filename=f"trade_{model_key}.png")
 
-# --- NOVA VISUALIZAÇÃO: Resultado de Trading (Subplots) ---
-fig, axs = plt.subplots(3, 1, figsize=(15, 12), sharex=True)
-# Aqui chamamos a lógica de plot_trading_results adaptada para subplots
-# Ou chamamos separadamente:
-plot_trading_results(env_simple, agent_simple, output_dir=PASTA_PLOTS, filename="trade_simples.png")
-plot_trading_results(env_window, agent_window, output_dir=PASTA_PLOTS, filename="trade_janela.png")
-plot_trading_results(env_ma, agent_ma, output_dir=PASTA_PLOTS, filename="trade_ma.png")
+    # Comparação interna dos 3 modelos para este dataset
+    plt.figure(figsize=(12, 6))
+    plt.plot(suavizar_curva(recompensas_por_modelo["simple"]), label="Simples (1 dia)")
+    plt.plot(suavizar_curva(recompensas_por_modelo["trend_3"]), label="Janela (3 dias)")
+    plt.plot(suavizar_curva(recompensas_por_modelo["ma_5_20"]), label="Médias Móveis")
+    plt.title(f"Evolução do Desempenho (Lucro + Penalidades) | {dataset_label}")
+    plt.xlabel("Episódios")
+    plt.ylabel("Recompensa Suavizada")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "comparacao_3_modelos.png"), dpi=300)
+    plt.close()
+
+    return recompensas_por_modelo, envs_por_modelo, agents_por_modelo
+
+
+def plotar_comparacao_sintetico_vs_real(rewards_sint, rewards_real, output_dir, janela=20):
+    """Gera 3 gráficos (um por modelo) comparando senoide vs real."""
+    modelos = [
+        ("simple", "Simples (1 dia)"),
+        ("trend_3", "Janela (3 dias)"),
+        ("ma_5_20", "Médias Móveis"),
+    ]
+
+    for model_key, model_name in modelos:
+        plt.figure(figsize=(12, 6))
+        plt.plot(suavizar_curva(rewards_sint[model_key], janela=janela), label=f"Senoide - {model_name}")
+        plt.plot(suavizar_curva(rewards_real[model_key], janela=janela), label=f"Real - {model_name}")
+        plt.title(f"Comparação de Desempenho | {model_name}")
+        plt.xlabel("Episódios")
+        plt.ylabel("Recompensa Suavizada")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, f"comparacao_sintetico_vs_real_{model_key}.png"), dpi=300)
+        plt.close()
+
+
+if __name__ == "__main__":
+    # 1) Dados sintéticos (senoide)
+    t = np.linspace(0, 50, 200)
+    precos_sinteticos = 100 + 20 * np.sin(t) + np.random.normal(0, 2, 200)
+
+    # 2) Dados reais (Yahoo Finance)
+    print("Carregando dados reais do mercado...")
+    TICKER = "PETR4.SA"
+    START_DATE = "2020-01-01"
+    END_DATE = "2023-01-01"
+    precos_reais = obter_dados_reais(TICKER, START_DATE, END_DATE)
+
+    # 3) Executando o treinamento
+    episodes = 1000
+
+    rewards_sint, _, _ = treinar_tres_modelos(
+        prices=precos_sinteticos,
+        dataset_label="Senoide (Sintético)",
+        output_dir=PASTA_PLOTS_SINTETICO,
+        episodes=episodes,
+    )
+
+    rewards_real, _, _ = treinar_tres_modelos(
+        prices=precos_reais,
+        dataset_label=f"Real ({TICKER})",
+        output_dir=PASTA_PLOTS_REAL,
+        episodes=episodes,
+    )
+
+    # 4) Comparações entre datasets (sintético vs real)
+    plotar_comparacao_sintetico_vs_real(
+        rewards_sint=rewards_sint,
+        rewards_real=rewards_real,
+        output_dir=PASTA_PLOTS_COMPARACOES,
+        janela=20,
+    )

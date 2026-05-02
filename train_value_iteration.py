@@ -1,18 +1,19 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 from env.market_env import MarketEnv
 from agent.policy_evaluation import ModelBasedEvaluator
 
-# Garante que o diretório de plots exista
-PASTA_PLOTS = "plots/ambiente_sintetico"
-os.makedirs(PASTA_PLOTS, exist_ok=True)
+from utils.data_loader import obter_dados_reais
 
-# 1. Gerando os mesmos dados sintéticos do train.py original
-t = np.linspace(0, 50, 200)
-precos_sinteticos = 100 + 20 * np.sin(t) + np.random.normal(0, 2, 200)
+# Pastas de saída
+PASTA_PLOTS_SINTETICO = "plots/ambiente_sintetico_value_iteration"
+PASTA_PLOTS_REAL = "plots/ambiente_real_value_iteration"
+PASTA_PLOTS_COMPARACOES = "plots/comparacoes_value_iteration_sintetico_vs_real"
+os.makedirs(PASTA_PLOTS_SINTETICO, exist_ok=True)
+os.makedirs(PASTA_PLOTS_REAL, exist_ok=True)
+os.makedirs(PASTA_PLOTS_COMPARACOES, exist_ok=True)
 
 
 def executar_value_iteration(env, nome_modelo, episodes_amostragem=1000):
@@ -52,53 +53,123 @@ def executar_value_iteration(env, nome_modelo, episodes_amostragem=1000):
     return recompensa_total
 
 
-# ==========================================
-# EXECUÇÃO DOS 3 MODELOS
-# ==========================================
-nomes_modelos = ["Simples (1 Dia)", "Janela (3 Dias)", "Médias Móveis"]
-lucros_finais = []
+def executar_tres_modelos(prices, dataset_label, output_dir, episodes_amostragem=1000):
+    """Executa Value Iteration para 3 modelos (simple, trend_3, ma_5_20) em um dataset."""
+    configs = [
+        ("simple", "Simples (1 dia)", dict(state_type="simple")),
+        ("trend_3", "Janela (3 dias)", dict(state_type="trend", window_size=3)),
+        ("ma_5_20", "Médias Móveis", dict(state_type="ma", fast_period=5, slow_period=20)),
+    ]
 
-# --- 1. Modelo Simples ---
-env_simple = MarketEnv(prices=precos_sinteticos, state_type="simple")
-lucros_finais.append(executar_value_iteration(env_simple, nomes_modelos[0]))
+    lucros_por_modelo = {}
+    print(f"\n=== Dataset: {dataset_label} | amostragem={episodes_amostragem} | n_steps={len(prices)} ===")
 
-# --- 2. Modelo Janela ---
-env_window = MarketEnv(prices=precos_sinteticos, state_type="trend", window_size=3)
-lucros_finais.append(executar_value_iteration(env_window, nomes_modelos[1]))
+    for model_key, model_name, env_kwargs in configs:
+        env = MarketEnv(prices=prices, **env_kwargs)
+        lucro = executar_value_iteration(env, f"{model_name} ({dataset_label})", episodes_amostragem=episodes_amostragem)
+        lucros_por_modelo[model_key] = lucro
 
-# --- 3. Modelo Médias Móveis ---
-env_ma = MarketEnv(prices=precos_sinteticos, state_type="ma", fast_period=5, slow_period=20)
-lucros_finais.append(executar_value_iteration(env_ma, nomes_modelos[2]))
+    # Gráfico interno dos 3 modelos para este dataset
+    nomes = ["Simples (1 dia)", "Janela (3 dias)", "Médias Móveis"]
+    valores = [lucros_por_modelo["simple"], lucros_por_modelo["trend_3"], lucros_por_modelo["ma_5_20"]]
+    cores = ['#ff9999', '#66b3ff', '#99ff99']
 
-# ==========================================
-# GERAÇÃO DO GRÁFICO COMPARATIVO
-# ==========================================
-print("\nGerando gráfico comparativo de lucros...")
+    plt.figure(figsize=(10, 6))
+    barras = plt.bar(nomes, valores, color=cores, edgecolor='black')
 
-plt.figure(figsize=(10, 6))
-# Define cores distintas para facilitar a visualização no relatório
-cores = ['#ff9999', '#66b3ff', '#99ff99']
+    for barra in barras:
+        altura = barra.get_height()
+        plt.text(
+            barra.get_x() + barra.get_width() / 2.,
+            altura + (abs(altura) * 0.02 + 1),
+            f'${altura:.2f}',
+            ha='center',
+            va='bottom',
+            fontweight='bold',
+            fontsize=11,
+        )
 
-# Cria o gráfico de barras
-barras = plt.bar(nomes_modelos, lucros_finais, color=cores, edgecolor='black')
+    plt.title(f"Comparação de Desempenho: Value Iteration | {dataset_label}", fontsize=14)
+    plt.ylabel("Lucro Total Acumulado ($)", fontsize=12)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.axhline(0, color='black', linewidth=1)
 
-# Adiciona os rótulos com os valores exatos em cima de cada barra
-for barra in barras:
-    altura = barra.get_height()
-    plt.text(barra.get_x() + barra.get_width() / 2., altura + 1,
-             f'${altura:.2f}',
-             ha='center', va='bottom', fontweight='bold', fontsize=11)
+    caminho_grafico = os.path.join(output_dir, "comparacao_3_modelos.png")
+    plt.tight_layout()
+    plt.savefig(caminho_grafico, dpi=300)
+    plt.close()
 
-plt.title("Comparação de Desempenho: Value Iteration (Políticas Ótimas)", fontsize=14)
-plt.ylabel("Lucro Total Acumulado ($)", fontsize=12)
-plt.grid(axis='y', linestyle='--', alpha=0.7)
+    print(f"Gráfico salvo em: {caminho_grafico}")
+    return lucros_por_modelo
 
-# Adiciona uma linha no eixo zero para destacar prejuízos, se houver
-plt.axhline(0, color='black', linewidth=1)
 
-caminho_grafico = os.path.join(PASTA_PLOTS, "comparacao_lucro_dp.png")
-plt.tight_layout()
-plt.savefig(caminho_grafico, dpi=300)
-plt.close()
+def plotar_comparacao_sintetico_vs_real(lucros_sint, lucros_real, output_dir):
+    """Gera 3 gráficos (um por modelo) comparando senoide vs real."""
+    modelos = [
+        ("simple", "Simples (1 dia)"),
+        ("trend_3", "Janela (3 dias)"),
+        ("ma_5_20", "Médias Móveis"),
+    ]
 
-print(f"Gráfico salvo com sucesso em: {caminho_grafico}")
+    for model_key, model_name in modelos:
+        plt.figure(figsize=(8, 5))
+        valores = [lucros_sint[model_key], lucros_real[model_key]]
+        barras = plt.bar(["Senoide", "Real"], valores, color=['#66b3ff', '#ff9999'], edgecolor='black')
+
+        for barra in barras:
+            altura = barra.get_height()
+            plt.text(
+                barra.get_x() + barra.get_width() / 2.,
+                altura + (abs(altura) * 0.02 + 1),
+                f'${altura:.2f}',
+                ha='center',
+                va='bottom',
+                fontweight='bold',
+                fontsize=11,
+            )
+
+        plt.title(f"Comparação Senoide vs Real | {model_name}", fontsize=13)
+        plt.ylabel("Lucro Total Acumulado ($)", fontsize=12)
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.axhline(0, color='black', linewidth=1)
+
+        caminho = os.path.join(output_dir, f"comparacao_sintetico_vs_real_{model_key}.png")
+        plt.tight_layout()
+        plt.savefig(caminho, dpi=300)
+        plt.close()
+
+
+if __name__ == "__main__":
+    # 1) Dados sintéticos (senoide)
+    t = np.linspace(0, 50, 200)
+    precos_sinteticos = 100 + 20 * np.sin(t) + np.random.normal(0, 2, 200)
+
+    # 2) Dados reais (Yahoo Finance)
+    print("Carregando dados reais do mercado...")
+    TICKER = "PETR4.SA"
+    START_DATE = "2020-01-01"
+    END_DATE = "2023-01-01"
+    precos_reais = obter_dados_reais(TICKER, START_DATE, END_DATE)
+
+    # 3) Execução
+    episodes_amostragem = 1000
+    lucros_sint = executar_tres_modelos(
+        prices=precos_sinteticos,
+        dataset_label="Senoide (Sintético)",
+        output_dir=PASTA_PLOTS_SINTETICO,
+        episodes_amostragem=episodes_amostragem,
+    )
+
+    lucros_real = executar_tres_modelos(
+        prices=precos_reais,
+        dataset_label=f"Real ({TICKER})",
+        output_dir=PASTA_PLOTS_REAL,
+        episodes_amostragem=episodes_amostragem,
+    )
+
+    # 4) Comparação entre datasets
+    plotar_comparacao_sintetico_vs_real(
+        lucros_sint=lucros_sint,
+        lucros_real=lucros_real,
+        output_dir=PASTA_PLOTS_COMPARACOES,
+    )
