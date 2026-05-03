@@ -230,3 +230,82 @@ def plot_v_values_heatmap(V, output_dir="resultados", filename="heatmap_v_values
     plt.close()
     print(f"Gráfico V(s) guardado em: {caminho_final}")
 
+def plotar_comparacao_exploracao(recompensas_dict, output_dir="resultados"):
+    """
+    Recebe um dicionário com os históricos de recompensa de diferentes estratégias
+    e plota as médias móveis em um único gráfico para comparação.
+    """
+    _garantir_pasta(output_dir)
+    caminho_final = os.path.join(output_dir, "comparacao_exploracao.png")
+    
+    plt.figure(figsize=(12, 6))
+    
+    cores = {"epsilon_decay": "blue", "epsilon_fixed": "orange"}
+    nomes = {
+        "epsilon_decay": "Epsilon-Greedy (Decaimento)", 
+        "epsilon_fixed": "Epsilon-Greedy (Fixo = 0.2)"
+    }
+    
+    window_size = 30 
+    
+    for strategy_name, recompensas in recompensas_dict.items():
+        if len(recompensas) >= window_size:
+            media_movel = np.convolve(recompensas, np.ones(window_size)/window_size, mode='valid')
+            eixo_x = range(window_size - 1, len(recompensas))
+            plt.plot(eixo_x, media_movel, label=nomes[strategy_name], color=cores.get(strategy_name, "black"), linewidth=2)
+            
+    plt.title("Comparação de Estratégias de Exploração (Q-Learning)", fontsize=14)
+    plt.xlabel("Episódios", fontsize=12)
+    plt.ylabel("Lucro Médio Suavizado ($)", fontsize=12)
+    plt.legend(fontsize=11)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    
+    plt.savefig(caminho_final, dpi=300)
+    plt.close()
+    print(f"Gráfico de comparação de exploração guardado em: {caminho_final}")
+
+def plot_learned_policy(agent, output_dir="resultados"):
+    """
+    Gera um mapa de calor mostrando a política final aprendida (a melhor ação para cada estado).
+    """
+    _garantir_pasta(output_dir)
+    caminho_final = os.path.join(output_dir, "politica_aprendida.png")
+    
+    estados = list(agent.q_table.keys())
+    # Em vez de pegar os valores Q, pegamos o índice da maior ação (0, 1 ou 2)
+    melhores_acoes = np.array([np.argmax(agent.q_table[s]) for s in estados])
+    
+    # Reformata para uma matriz 2D (Nx1) para o heatmap do Seaborn aceitar
+    matriz_politica = melhores_acoes.reshape(-1, 1)
+    
+    labels_estados = []
+    for s in estados:
+        pos = s[0]
+        tendencia = tuple(s[1:]) if len(s) > 2 else s[1]
+        labels_estados.append(f"Pos: {pos}, Tend.: {tendencia}")
+        
+    altura_figura = max(6, len(estados) * 0.4)
+    plt.figure(figsize=(6, altura_figura))
+    
+    # Usamos um colormap discreto para as 3 ações
+    cmap_discreto = mcolors.ListedColormap(['#cccccc', '#2ca02c', '#d62728'])
+    
+    ax = sns.heatmap(matriz_politica, annot=True, fmt="d", cmap=cmap_discreto,
+                     xticklabels=["Ação Escolhida"], yticklabels=labels_estados,
+                     cbar=False)
+    
+    # Ajusta as anotações para mostrar o nome da ação em vez do número
+    mapa_nomes = {0: "Manter", 1: "Comprar", 2: "Vender"}
+    for t in ax.texts:
+        t.set_text(mapa_nomes[int(t.get_text())])
+        t.set_fontsize(10)
+        t.set_fontweight('bold')
+    
+    plt.title("Política Aprendida $\pi(s)$", fontsize=14)
+    plt.ylabel("Estados (Posição, Tendência)", fontsize=12)
+    plt.tight_layout()
+    plt.savefig(caminho_final, dpi=300)
+    plt.close()
+    print(f"Gráfico da política aprendida guardado em: {caminho_final}")
+

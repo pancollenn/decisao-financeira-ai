@@ -9,7 +9,8 @@ from agent.q_learning import QLearningAgent
 from utils.plotter import (
     plot_trading_results, 
     plot_learning_with_epsilon, 
-    plot_q_table_heatmap
+    plot_q_table_heatmap,
+    plot_learned_policy
 )
 
 from utils.data_loader import obter_dados_reais
@@ -126,6 +127,9 @@ def treinar_tres_modelos(prices, dataset_label, output_dir, episodes):
         # 3. Heatmap da Tabela Q
         plot_q_table_heatmap(agent, output_dir=model_output_dir)
 
+        # 4. Gráfico da Política Aprendida (Ação ótima para cada estado)
+        plot_learned_policy(agent, output_dir=model_output_dir)
+
     # Comparação interna dos 3 modelos para este dataset
     plt.figure(figsize=(12, 6))
     plt.plot(suavizar_curva(recompensas_por_modelo["simple"]), label="Simples (1 dia)")
@@ -170,7 +174,6 @@ if __name__ == "__main__":
         episodes=episodes,
     )
 
-    # 4) Comparações entre datasets (sintético vs real)
     plotar_comparacao_sintetico_vs_real_qlearning(
         rewards_sint=rewards_sint,
         rewards_real=rewards_real,
