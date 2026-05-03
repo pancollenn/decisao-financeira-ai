@@ -6,7 +6,7 @@ from env.market_env import MarketEnv
 from agent.policy_evaluation import ModelBasedEvaluator
 
 from utils.data_loader import obter_dados_reais
-from utils.plotter import plotar_comparacao_sintetico_vs_real_value_iteration, plot_v_values_heatmap
+from utils.plotter import plotar_comparacao_sintetico_vs_real_value_iteration, plot_v_values_heatmap, plot_learned_policy_dict
 
 # Pastas de saída
 PASTA_PLOTS_SINTETICO = "plots/ambiente_sintetico_value_iteration"
@@ -51,9 +51,12 @@ def executar_value_iteration(env, nome_modelo, episodes_amostragem=1000, output_
     print(f"  -> Recompensa Total (Lucro): ${recompensa_total:.2f}")
     print(f"  -> Ações: Manter: {acoes_tomadas[0]}, Comprar: {acoes_tomadas[1]}, Vender: {acoes_tomadas[2]}")
 
-    # Criando a pasta do modelo específico e gerando o Heatmap
+    # Geração do Heatmap V(s)
     model_output_dir = os.path.join(output_dir, model_key)
     plot_v_values_heatmap(V, output_dir=model_output_dir, filename=f"heatmap_v_values_{model_key}.png")
+
+    # Geração do Heatmap da Política Ótima
+    plot_learned_policy_dict(optimal_policy, output_dir=model_output_dir)
 
     return recompensa_total
 

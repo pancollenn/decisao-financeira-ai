@@ -309,3 +309,51 @@ def plot_learned_policy(agent, output_dir="resultados"):
     plt.close()
     print(f"Gráfico da política aprendida guardado em: {caminho_final}")
 
+def plot_learned_policy_dict(policy_dict, output_dir="resultados", titulo="Política Aprendida $\pi(s)$"):
+    """
+    Gera um mapa de calor mostrando a política ótima a partir de um dicionário.
+    Ideal para usar com o retorno do Value Iteration.
+    """
+    _garantir_pasta(output_dir)
+    caminho_final = os.path.join(output_dir, "politica_aprendida_vi.png")
+    
+    # Filtra apenas estados que têm o formato de tupla com 2 ou mais elementos
+    estados = [s for s in policy_dict.keys() if isinstance(s, tuple) and len(s) >= 2]
+    
+    if not estados:
+        print("Aviso: Nenhum estado válido encontrado para plotar a política.")
+        return
+
+    melhores_acoes = np.array([policy_dict[s] for s in estados])
+    matriz_politica = melhores_acoes.reshape(-1, 1)
+    
+    labels_estados = []
+    for s in estados:
+        pos = s[0]
+        tendencia = tuple(s[1:]) if len(s) > 2 else s[1]
+        labels_estados.append(f"Pos: {pos}, Tend.: {tendencia}")
+        
+    altura_figura = max(6, len(estados) * 0.4)
+    plt.figure(figsize=(6, altura_figura))
+    
+    cmap_discreto = mcolors.ListedColormap(['#cccccc', '#2ca02c', '#d62728'])
+    
+    ax = sns.heatmap(matriz_politica, annot=True, fmt="d", cmap=cmap_discreto,
+                     xticklabels=["Ação Escolhida"], yticklabels=labels_estados,
+                     cbar=False)
+    
+    mapa_nomes = {0: "Manter", 1: "Comprar", 2: "Vender"}
+    for t in ax.texts:
+        texto_atual = t.get_text()
+        if texto_atual.isdigit():
+            t.set_text(mapa_nomes[int(texto_atual)])
+            t.set_fontsize(10)
+            t.set_fontweight('bold')
+    
+    plt.title(titulo, fontsize=14)
+    plt.ylabel("Estados (Posição, Tendência)", fontsize=12)
+    plt.tight_layout()
+    plt.savefig(caminho_final, dpi=300)
+    plt.close()
+    print(f"Gráfico da política guardado em: {caminho_final}")
+
