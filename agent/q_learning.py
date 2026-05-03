@@ -13,7 +13,7 @@ class QLearningAgent:
         self.epsilon_decay = epsilon_decay      # Decaimento da taxa de exploração
         self.epsilon_min = epsilon_min          # Taxa de exploração mínima
 
-        # Tabela Q: dicionário em que a chave é a tupla do estado (posicao, tendencia)
+        # Tabela Q: dicionário em que a chave é a tupla do estado (posicao, tendencia), se o dinheiro está em caixa ou ações, e se o valor subiu ou desceu
         # e o valor é um array do NumPy contendo os Valores Q para cada ação.
         self.q_table = {}
 

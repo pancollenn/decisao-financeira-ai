@@ -6,6 +6,7 @@ from env.market_env import MarketEnv
 from agent.policy_evaluation import ModelBasedEvaluator
 
 from utils.data_loader import obter_dados_reais
+from utils.plotter import plotar_comparacao_sintetico_vs_real_value_iteration, plot_v_values_heatmap
 
 # Pastas de saída
 PASTA_PLOTS_SINTETICO = "plots/ambiente_sintetico_value_iteration"
@@ -16,7 +17,7 @@ os.makedirs(PASTA_PLOTS_REAL, exist_ok=True)
 os.makedirs(PASTA_PLOTS_COMPARACOES, exist_ok=True)
 
 
-def executar_value_iteration(env, nome_modelo, episodes_amostragem=1000):
+def executar_value_iteration(env, nome_modelo, episodes_amostragem=1000, output_dir="resultados", model_key="default"):
     """
     Executa a amostragem, resolve as equações de Bellman e avalia a política.
     Retorna o lucro total do episódio de teste.
@@ -30,7 +31,7 @@ def executar_value_iteration(env, nome_modelo, episodes_amostragem=1000):
 
     # 2. Resolução das Equações de Otimalidade de Bellman
     print("Executando Value Iteration...")
-    _, optimal_policy = evaluator.value_iteration(theta=1e-5)
+    V, optimal_policy = evaluator.value_iteration(theta=1e-5)
 
     # 3. Avaliação da Política Ótima no Ambiente
     estado = env.reset()
@@ -50,6 +51,10 @@ def executar_value_iteration(env, nome_modelo, episodes_amostragem=1000):
     print(f"  -> Recompensa Total (Lucro): ${recompensa_total:.2f}")
     print(f"  -> Ações: Manter: {acoes_tomadas[0]}, Comprar: {acoes_tomadas[1]}, Vender: {acoes_tomadas[2]}")
 
+    # Criando a pasta do modelo específico e gerando o Heatmap
+    model_output_dir = os.path.join(output_dir, model_key)
+    plot_v_values_heatmap(V, output_dir=model_output_dir, filename=f"heatmap_v_values_{model_key}.png")
+
     return recompensa_total
 
 
@@ -66,7 +71,14 @@ def executar_tres_modelos(prices, dataset_label, output_dir, episodes_amostragem
 
     for model_key, model_name, env_kwargs in configs:
         env = MarketEnv(prices=prices, **env_kwargs)
-        lucro = executar_value_iteration(env, f"{model_name} ({dataset_label})", episodes_amostragem=episodes_amostragem)
+        
+        lucro = executar_value_iteration(
+            env, 
+            f"{model_name} ({dataset_label})", 
+            episodes_amostragem=episodes_amostragem,
+            output_dir=output_dir,
+            model_key=model_key
+        )
         lucros_por_modelo[model_key] = lucro
 
     # Gráfico interno dos 3 modelos para este dataset
@@ -102,43 +114,6 @@ def executar_tres_modelos(prices, dataset_label, output_dir, episodes_amostragem
     print(f"Gráfico salvo em: {caminho_grafico}")
     return lucros_por_modelo
 
-
-def plotar_comparacao_sintetico_vs_real(lucros_sint, lucros_real, output_dir):
-    """Gera 3 gráficos (um por modelo) comparando senoide vs real."""
-    modelos = [
-        ("simple", "Simples (1 dia)"),
-        ("trend_3", "Janela (3 dias)"),
-        ("ma_5_20", "Médias Móveis"),
-    ]
-
-    for model_key, model_name in modelos:
-        plt.figure(figsize=(8, 5))
-        valores = [lucros_sint[model_key], lucros_real[model_key]]
-        barras = plt.bar(["Senoide", "Real"], valores, color=['#66b3ff', '#ff9999'], edgecolor='black')
-
-        for barra in barras:
-            altura = barra.get_height()
-            plt.text(
-                barra.get_x() + barra.get_width() / 2.,
-                altura + (abs(altura) * 0.02 + 1),
-                f'${altura:.2f}',
-                ha='center',
-                va='bottom',
-                fontweight='bold',
-                fontsize=11,
-            )
-
-        plt.title(f"Comparação Senoide vs Real | {model_name}", fontsize=13)
-        plt.ylabel("Lucro Total Acumulado ($)", fontsize=12)
-        plt.grid(axis='y', linestyle='--', alpha=0.7)
-        plt.axhline(0, color='black', linewidth=1)
-
-        caminho = os.path.join(output_dir, f"comparacao_sintetico_vs_real_{model_key}.png")
-        plt.tight_layout()
-        plt.savefig(caminho, dpi=300)
-        plt.close()
-
-
 if __name__ == "__main__":
     # 1) Dados sintéticos (senoide)
     t = np.linspace(0, 50, 200)
@@ -168,7 +143,7 @@ if __name__ == "__main__":
     )
 
     # 4) Comparação entre datasets
-    plotar_comparacao_sintetico_vs_real(
+    plotar_comparacao_sintetico_vs_real_value_iteration(
         lucros_sint=lucros_sint,
         lucros_real=lucros_real,
         output_dir=PASTA_PLOTS_COMPARACOES,
