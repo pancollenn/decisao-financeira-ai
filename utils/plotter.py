@@ -192,35 +192,58 @@ def plotar_comparacao_sintetico_vs_real_value_iteration(lucros_sint, lucros_real
 def plot_v_values_heatmap(V, output_dir="resultados", filename="heatmap_v_values.png"):
     """
     Gera um mapa de calor visualizando os Valores V(s) aprendidos pelo Value Iteration.
-    Assume que os estados são tuplas de 2 dimensões: (posição, sinal/tendência).
+    Suporta estados no formato:
+      - (posição, sinal)                  -> modelos "simple" e "ma"
+      - (posição, t1, t2, ..., tk)        -> modelo "trend" com janela k
     """
     _garantir_pasta(output_dir)
     caminho_final = os.path.join(output_dir, filename)
-    
-    # Filtra apenas os estados que têm 2 elementos (posição, sinal)
-    estados_2d = {s: v for s, v in V.items() if isinstance(s, tuple) and len(s) == 2}
-    
-    if not estados_2d:
-        print("Aviso: Nenhum estado 2D encontrado para plotar o heatmap de V(s).")
+
+    # Normaliza estados para 2D: (posicao, sinal/tendencia)
+    # - Se o estado tiver mais de 2 elementos, o "sinal" vira a tupla (t1, t2, ..., tk).
+    valores_por_estado = {}
+    for s, v in V.items():
+        if not (isinstance(s, tuple) and len(s) >= 2):
+            continue
+
+        pos = s[0]
+        sinal = tuple(s[1:]) if len(s) > 2 else s[1]
+        valores_por_estado[(pos, sinal)] = float(v)
+
+    if not valores_por_estado:
+        print("Aviso: Nenhum estado válido encontrado para plotar o heatmap de V(s).")
         return
 
-    # Descobre os valores únicos de posição (eixo Y) e sinal (eixo X)
-    posicoes = sorted(list(set(s[0] for s in estados_2d.keys())))
-    sinais = sorted(list(set(s[1] for s in estados_2d.keys())))
-    
+    # Descobre os valores únicos de posição (eixo Y) e sinal/tendência (eixo X)
+    posicoes = sorted(list(set(pos for pos, _ in valores_por_estado.keys())))
+    sinais = sorted(list(set(sinal for _, sinal in valores_por_estado.keys())))
+
     # Cria a matriz de valores
     matriz_v = np.zeros((len(posicoes), len(sinais)))
     for i, pos in enumerate(posicoes):
         for j, sinal in enumerate(sinais):
-            matriz_v[i, j] = estados_2d.get((pos, sinal), 0.0)
+            matriz_v[i, j] = valores_por_estado.get((pos, sinal), 0.0)
 
-    # Nomes para os eixos (adaptável caso usem tendência ou média móvel)
     labels_posicao = [f"Pos {p} (Líquido)" if p == 0 else f"Pos {p} (Comprado)" for p in posicoes]
-    labels_sinal = [f"Sinal {s} (Baixa)" if s == 0 else f"Sinal {s} (Alta)" for s in sinais]
 
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(matriz_v, annot=True, fmt=".2f", cmap="viridis", 
-                xticklabels=labels_sinal, yticklabels=labels_posicao)
+    # Labels do eixo X: depende do tipo do sinal
+    if all(isinstance(s, (int, np.integer)) for s in sinais) and set(int(s) for s in sinais).issubset({0, 1}):
+        labels_sinal = [f"Sinal {int(s)} (Baixa)" if int(s) == 0 else f"Sinal {int(s)} (Alta)" for s in sinais]
+    elif all(isinstance(s, tuple) for s in sinais):
+        labels_sinal = [f"Tend {s}" for s in sinais]
+    else:
+        labels_sinal = [str(s) for s in sinais]
+
+    largura = max(8, 1.2 * len(sinais))
+    plt.figure(figsize=(largura, 6))
+    sns.heatmap(
+        matriz_v,
+        annot=True,
+        fmt=".2f",
+        cmap="viridis",
+        xticklabels=labels_sinal,
+        yticklabels=labels_posicao,
+    )
     
     plt.title("Mapa de Valores V(s) - Equações de Bellman", fontsize=14)
     plt.xlabel("Sinal / Tendência", fontsize=12)
@@ -302,14 +325,14 @@ def plot_learned_policy(agent, output_dir="resultados"):
         t.set_fontsize(10)
         t.set_fontweight('bold')
     
-    plt.title("Política Aprendida $\pi(s)$", fontsize=14)
+    plt.title(r"Política Aprendida $\pi(s)$", fontsize=14)
     plt.ylabel("Estados (Posição, Tendência)", fontsize=12)
     plt.tight_layout()
     plt.savefig(caminho_final, dpi=300)
     plt.close()
     print(f"Gráfico da política aprendida guardado em: {caminho_final}")
 
-def plot_learned_policy_dict(policy_dict, output_dir="resultados", titulo="Política Aprendida $\pi(s)$"):
+def plot_learned_policy_dict(policy_dict, output_dir="resultados", titulo=r"Política Aprendida $\pi(s)$"):
     """
     Gera um mapa de calor mostrando a política ótima a partir de um dicionário.
     Ideal para usar com o retorno do Value Iteration.
